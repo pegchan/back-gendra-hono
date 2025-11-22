@@ -1,12 +1,14 @@
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-slim
 
 WORKDIR /app
+
+# Install OpenSSL for Prisma
+RUN apt-get update && apt-get install -y openssl libssl-dev && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install all dependencies
 RUN npm ci
 
 # Copy prisma schema
@@ -21,24 +23,12 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS production
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies only
-RUN npm ci --only=production
-
-# Copy built files from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/prisma ./prisma
+# Copy and set permissions for entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "dist/index.js"]
+# Use entrypoint script
+CMD ["/entrypoint.sh"]
